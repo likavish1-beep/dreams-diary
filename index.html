@@ -292,24 +292,11 @@ const LESSON_AUDIO={
 };
 function lessonAudioHtml(num){
   const id=LESSON_AUDIO[num];if(!id)return '';
-  const src=`https://drive.usercontent.google.com/download?id=${id}&export=download&confirm=t`;
-  const sp=[1,1.5,2].map(r=>`<button type="button" class="aud-speed${r===1?' on':''}" onclick="setAudSpeed(${num},${r},this)">${String(r).replace('.',',')}×</button>`).join('');
   return `<div class="card" style="padding:14px 12px 12px;margin-bottom:14px">
     <div style="font-size:11px;letter-spacing:.12em;color:var(--gold);text-transform:uppercase;margin-bottom:12px">🎧 Аудиоурок</div>
-    <div id="aud-wrap-${num}">
-      <audio id="aud-${num}" controls preload="metadata" src="${src}" style="width:100%;display:block;margin-top:4px" onerror="audFallback(${num})"></audio>
-      <div style="display:flex;gap:8px;align-items:center;margin-top:10px"><span style="font-size:12px;color:var(--muted)">Скорость:</span>${sp}</div>
-    </div>
+    <iframe src="https://drive.google.com/file/d/${id}/preview" style="width:100%;height:170px;border:0;display:block" allow="autoplay" loading="lazy"></iframe>
     <a href="https://drive.google.com/file/d/${id}/view" target="_blank" rel="noopener" style="display:inline-block;margin-top:10px;font-size:12px;color:var(--muted)">Если плеер не загрузился — открыть урок отдельно ↗</a>
   </div>`;
-}
-function setAudSpeed(num,r,btn){
-  const a=document.getElementById('aud-'+num);if(a)a.playbackRate=r;
-  btn.parentNode.querySelectorAll('.aud-speed').forEach(x=>x.classList.remove('on'));btn.classList.add('on');
-}
-function audFallback(num){
-  const w=document.getElementById('aud-wrap-'+num);const id=LESSON_AUDIO[num];if(!w||!id)return;
-  w.innerHTML=`<iframe src="https://drive.google.com/file/d/${id}/preview" style="width:100%;height:110px;border:0;display:block;margin-top:8px" allow="autoplay"></iframe>`;
 }
 
 const LESSON_DAYS={
