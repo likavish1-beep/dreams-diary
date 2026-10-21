@@ -285,19 +285,49 @@ function getCourseDay(){
   return Math.max(1,Math.floor((Date.now()-UNLOCK_BASE)/(1000*60*60*24))+1);
 }
 
-// Аудио уроков: номер урока → ID файла на Google Диске
-const LESSON_AUDIO={
-  1:"1FMcARLMIu_ULNJXo7QImFSl61mcQ0SFr",
-  2:"1xT26gX35SlbkjhMFjolAPLq0tNy-zeqi"
-};
-function lessonAudioHtml(num){
-  const id=LESSON_AUDIO[num];if(!id)return '';
-  return `<div class="card" style="padding:14px 12px 12px;margin-bottom:14px">
-    <div style="font-size:11px;letter-spacing:.12em;color:var(--gold);text-transform:uppercase;margin-bottom:12px">🎧 Аудиоурок</div>
-    <iframe src="https://drive.google.com/file/d/${id}/preview" style="width:100%;height:170px;border:0;display:block" allow="autoplay" loading="lazy"></iframe>
-    <a href="https://drive.google.com/file/d/${id}/view" target="_blank" rel="noopener" style="display:inline-block;margin-top:10px;font-size:12px;color:var(--muted)">Если плеер не загрузился — открыть урок отдельно ↗</a>
-  </div>`;
+// Аудио уроков.
+// 1) mp3 на нашем сервере: audio/lessons.json → плеер со скоростью 1× / 1,5× / 2×
+// 2) запасной вариант: файлы «УРОК N» из папки Google Диска (через Apps Script) → плеер Диска
+const AUDIO_FEED='https://script.google.com/macros/s/AKfycbzmswfBYkCtvdLv7H8FeKGK_lD4-I-8_2U3II-XebfblXFt6XH-Gx7aq02HrgL8QUfb/exec';
+const LESSON_AUDIO={1:"1FMcARLMIu_ULNJXo7QImFSl61mcQ0SFr",2:"1xT26gX35SlbkjhMFjolAPLq0tNy-zeqi"};
+const AUDIO_MP3={};
+let audioLoaded=false;
+function loadAudioSources(){
+  const mp3=fetch('audio/lessons.json?t='+Date.now(),{cache:'no-store'}).then(r=>r.ok?r.json():{}).then(j=>{
+    Object.keys(j||{}).forEach(k=>{AUDIO_MP3[+k]='audio/'+j[k];});
+  }).catch(()=>{});
+  const drive=fetch(AUDIO_FEED).then(r=>r.json()).then(list=>{
+    (list||[]).forEach(f=>{const m=/^\s*урок\s*(\d+)/i.exec(f.name||'');if(m)LESSON_AUDIO[+m[1]]=f.id;});
+  }).catch(()=>{});
+  Promise.all([mp3,drive]).then(()=>{audioLoaded=true;fillAudioSlots();});
 }
+function lessonAudioHtml(num){
+  return `<div class="aud-slot" data-num="${num}"></div>`;
+}
+function fillAudioSlots(){
+  document.querySelectorAll('.aud-slot').forEach(el=>{
+    if(el.dataset.done)return;
+    const num=+el.dataset.num;const mp3=AUDIO_MP3[num];const id=LESSON_AUDIO[num];
+    if(!mp3&&!id){if(audioLoaded)el.innerHTML='';return;}
+    el.dataset.done='1';
+    let body='';
+    if(mp3){
+      const sp=[1,1.5,2].map(r=>`<button type="button" class="aud-speed${r===1?' on':''}" onclick="setAudSpeed(${num},${r},this)">${String(r).replace('.',',')}×</button>`).join('');
+      body=`<audio id="aud-${num}" controls preload="metadata" src="${mp3}" style="width:100%;display:block"></audio>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:10px"><span style="font-size:12px;color:var(--muted)">Скорость:</span>${sp}</div>`;
+    }else{
+      body=`<iframe src="https://drive.google.com/file/d/${id}/preview" style="width:100%;height:170px;border:0;display:block" allow="autoplay" loading="lazy"></iframe>
+        <a href="https://drive.google.com/file/d/${id}/view" target="_blank" rel="noopener" style="display:inline-block;margin-top:10px;font-size:12px;color:var(--muted)">Если плеер не загрузился — открыть урок отдельно ↗</a>`;
+    }
+    el.innerHTML=`<div class="card" style="padding:14px 12px 12px;margin-bottom:14px">
+      <div style="font-size:11px;letter-spacing:.12em;color:var(--gold);text-transform:uppercase;margin-bottom:12px">🎧 Аудиоурок</div>${body}</div>`;
+  });
+}
+function setAudSpeed(num,r,btn){
+  const a=document.getElementById('aud-'+num);if(a)a.playbackRate=r;
+  btn.parentNode.querySelectorAll('.aud-speed').forEach(x=>x.classList.remove('on'));btn.classList.add('on');
+}
+loadAudioSources();
 
 const LESSON_DAYS={
   1:1,2:2,3:3,4:4,5:5,
@@ -641,6 +671,7 @@ function renderBlockContent(){
     }
   });
   document.getElementById('block-content').innerHTML=html;
+  fillAudioSlots();
 }
 
 function saveAnswer(el){
