@@ -127,8 +127,8 @@ input[type=date],input[type=text],input[type=tel],input[type=email]{min-height:a
 
 <!-- SCREEN: ЗАПИСЬ -->
 <div class="screen active" id="screen-journal">
-  <div class="page-title">Запись сна</div>
-  <div class="page-sub">Сегодняшняя ночь</div>
+  <div class="page-title" id="journal-title">Запись сна</div>
+  <div class="page-sub" id="journal-sub">Сегодняшняя ночь</div>
   <form id="entry-form">
     <label>Дата</label>
     <input type="date" id="f-date">
@@ -155,7 +155,8 @@ input[type=date],input[type=text],input[type=tel],input[type=email]{min-height:a
       <label><input type="radio" name="lucid" value="briefly"> Мимолётно</label>
       <label><input type="radio" name="lucid" value="no" checked> Нет</label>
     </div>
-    <button type="button" class="btn" onclick="saveEntry()">Сохранить запись</button>
+    <button type="button" class="btn" id="save-entry-btn" onclick="saveEntry()">Сохранить запись</button>
+    <button type="button" class="btn btn-ghost" id="cancel-edit-btn" onclick="cancelEdit()" style="display:none;margin-top:10px">Отменить редактирование</button>
   </form>
 </div>
 
@@ -350,7 +351,9 @@ const WAKE_RANGES=['22:00–00:00','00:00–02:00','02:00–04:00','04:00–06:0
 let wakeBlockCount=0;
 
 const S_DRAFT='sna_draft_v1';
+let editingId=null;
 function saveDraft(){
+  if(editingId)return;
   const texts=Array.from(document.querySelectorAll('.wake-text')).map(t=>t.value);
   localStorage.setItem(S_DRAFT,JSON.stringify(texts));
 }
@@ -404,26 +407,91 @@ function addWakeBlock(){
 }
 function removeWakeBlock(el){el.closest('.card').remove();}
 
-async function saveEntry(){
+function fmtSent(ts){
+  const d=new Date(ts);if(isNaN(d))return'';
+  const p=n=>String(n).padStart(2,'0');
+  return `${p(d.getDate())}.${p(d.getMonth()+1)}.${d.getFullYear()} в ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+function readForm(){
   const wakes=Array.from(document.querySelectorAll('#wake-blocks .card')).map(c=>({
     range:c.querySelector('.wake-range').value,
     text:c.querySelector('.wake-text').value.trim()
   })).filter(w=>w.text);
-  if(!wakes.length){showToast('Напиши хоть в одном пробуждении ☾');return;}
-  const entry={id:Date.now(),date:document.getElementById('f-date').value,
+  return {date:document.getElementById('f-date').value,
     quality:document.querySelector('input[name=quality]:checked')?.value||'medium',
     wakes,
     amulet:document.querySelector('input[name=amulet]:checked')?.value||'dontknow',
     lucid:document.querySelector('input[name=lucid]:checked')?.value||'no'};
-  const entries=getEntries();entries.unshift(entry);saveEntries(entries);
-  showToast('Запись сохранена ✦');
-  const user=getUser(),uname=user?user.name:'Студент';
-  let msg=`📖 <b>СОН</b> — ${escHtml(uname)}\n📅 ${formatDate(entry.date)} · ${QUALITY_LABELS[entry.quality]||''}\n\n`;
-  wakes.forEach((w,i)=>{msg+=`🌙 <b>Пробуждение ${i+1}</b>${w.range?' · '+escHtml(w.range):''}\n${escHtml(w.text)}\n\n`;});
+}
+function entryMsgBody(entry){
+  let msg=`📅 ${formatDate(entry.date)} · ${QUALITY_LABELS[entry.quality]||''}\n\n`;
+  entry.wakes.forEach((w,i)=>{msg+=`🌙 <b>Пробуждение ${i+1}</b>${w.range?' · '+escHtml(w.range):''}\n${escHtml(w.text)}\n\n`;});
   msg+=`💍 Амулет: ${AMULET_LABELS[entry.amulet]||''}\n✨ Осознание: ${LUCID_LABELS[entry.lucid]||''}`;
-  await tgSend(msg);
+  return msg;
+}
+async function saveEntry(){
+  const f=readForm();
+  if(!f.wakes.length){showToast('Напиши хоть в одном пробуждении ☾');return;}
+  const user=getUser(),uname=user?user.name:'Студент';
+  const entries=getEntries();
+  if(editingId){
+    const idx=entries.findIndex(e=>e.id===editingId);
+    if(idx<0){cancelEdit();return;}
+    const old=entries[idx];
+    const entry=Object.assign({},old,f,{editedAt:Date.now(),edits:(old.edits||0)+1});
+    delete entry.saw;delete entry.felt;delete entry.remained;
+    entries[idx]=entry;saveEntries(entries);
+    const msg=`✏️ <b>КОРРЕКТИРОВКА</b> записи сна — ${escHtml(uname)}\nИсправлена запись за ${formatDate(old.date)}, отправленная ${fmtSent(old.id)}\n\n`+entryMsgBody(entry);
+    const ok=await tgSend(msg);
+    showToast(ok?'Изменения сохранены и отправлены ✦':'Изменения сохранены, но не отправились ✕');
+    exitEditMode();
+    initForm();
+    showScreen('entries',document.querySelector("nav button[onclick^=\"showScreen('entries'\"]"));
+    return;
+  }
+  const entry=Object.assign({id:Date.now()},f);
+  entries.unshift(entry);saveEntries(entries);
+  showToast('Запись сохранена ✦');
+  await tgSend(`📖 <b>СОН</b> — ${escHtml(uname)}\n`+entryMsgBody(entry));
   clearDraft();
   initForm();
+}
+function setRadio(name,val){
+  const rg=document.querySelector(`input[name=${name}]`)?.closest('.radio-group');if(!rg)return;
+  rg.querySelectorAll('input[type=radio]').forEach(r=>{r.checked=(r.value===val);});
+  rg.querySelectorAll('label').forEach(l=>l.classList.toggle('selected',!!l.querySelector('input:checked')));
+}
+function editEntry(id){
+  const e=getEntries().find(x=>x.id===id);if(!e)return;
+  closeModal();
+  editingId=id;
+  document.getElementById('journal-title').textContent='Редактирование записи';
+  document.getElementById('journal-sub').textContent='Изменения уйдут куратору с пометкой «корректировка»';
+  document.getElementById('save-entry-btn').textContent='Сохранить изменения';
+  document.getElementById('cancel-edit-btn').style.display='block';
+  document.getElementById('f-date').value=e.date||'';
+  setRadio('quality',e.quality||'medium');setRadio('amulet',e.amulet||'dontknow');setRadio('lucid',e.lucid||'no');
+  const wakes=e.wakes||(e.saw?[{range:'',text:[e.saw,e.felt,e.remained].filter(Boolean).join('\n\n')}]:[]);
+  document.getElementById('wake-blocks').innerHTML='';wakeBlockCount=0;
+  (wakes.length?wakes:[{range:'',text:''}]).forEach(w=>{
+    addWakeBlock();
+    const card=document.querySelector('#wake-blocks .card:last-child');
+    card.querySelector('.wake-text').value=w.text||'';
+    if(w.range){const sel=card.querySelector('.wake-range');if([...sel.options].some(o=>o.value===w.range))sel.value=w.range;}
+  });
+  showScreen('journal',document.querySelector("nav button[onclick^=\"showScreen('journal'\"]"));
+  window.scrollTo(0,0);
+}
+function exitEditMode(){
+  editingId=null;
+  document.getElementById('journal-title').textContent='Запись сна';
+  document.getElementById('journal-sub').textContent='Сегодняшняя ночь';
+  document.getElementById('save-entry-btn').textContent='Сохранить запись';
+  document.getElementById('cancel-edit-btn').style.display='none';
+}
+function cancelEdit(){
+  exitEditMode();initForm();
+  showScreen('entries',document.querySelector("nav button[onclick^=\"showScreen('entries'\"]"));
 }
 
 const QUALITY_LABELS={deep:'Глубокий',medium:'Средний',light:'Поверхностный'};
@@ -460,7 +528,9 @@ function openEntry(id){
       <span class="badge ${e.amulet==='yes'?'yes':''}">Амулет: ${AMULET_LABELS[e.amulet]||''}</span>
       <span class="badge ${e.lucid==='yes'||e.lucid==='briefly'?'yes':''}">Осознание: ${LUCID_LABELS[e.lucid]||''}</span>
     </div>
-    <button class="btn btn-ghost" style="margin-top:20px" onclick="closeModal()">← Назад</button>
+    ${e.editedAt?`<div style="font-size:12px;color:var(--muted);margin-top:10px">Исправлено ${fmtSent(e.editedAt)}</div>`:''}
+    <button class="btn" style="margin-top:20px" onclick="editEntry(${e.id})">✏️ Редактировать запись</button>
+    <button class="btn btn-ghost" style="margin-top:10px" onclick="closeModal()">← Назад</button>
     <button class="btn-danger" onclick="deleteEntry(${e.id})">Удалить запись</button>`;
   document.getElementById('entry-modal').classList.add('open');
 }
@@ -688,7 +758,12 @@ async function tgSendLesson(blockId,lessonNum){
   const block=BLOCKS.find(b=>b.id===blockId);if(!block)return;
   const lesson=block.lessons.find(l=>l.num===lessonNum);if(!lesson)return;
   const answers=getAnswers();
-  let msg=`📚 <b>ОТВЕТЫ</b> — ${escHtml(uname)}\n<b>${escHtml(block.name)} · Урок ${lessonNum} — ${escHtml(lesson.name)}</b>\n\n`;
+  const sentKey=`${blockId}_l${lessonNum}`;
+  let sent={};try{sent=JSON.parse(localStorage.getItem('sna_sent_v1')||'{}')}catch(e){}
+  const firstSent=sent[sentKey];
+  let msg=firstSent
+    ?`✏️ <b>КОРРЕКТИРОВКА ответов</b> — ${escHtml(uname)}\n<b>${escHtml(block.name)} · Урок ${lessonNum} — ${escHtml(lesson.name)}</b>\nИсправлены ответы, отправленные ${fmtSent(firstSent)}\n\n`
+    :`📚 <b>ОТВЕТЫ</b> — ${escHtml(uname)}\n<b>${escHtml(block.name)} · Урок ${lessonNum} — ${escHtml(lesson.name)}</b>\n\n`;
   let has=false;
   lesson.questions.forEach((q,qi)=>{
     const a=answers[`${blockId}_l${lessonNum}_q${qi}`];
@@ -696,7 +771,8 @@ async function tgSendLesson(blockId,lessonNum){
   });
   if(!has){showToast('Нет заполненных ответов ☾');return;}
   const ok=await tgSend(msg);
-  showToast(ok?'Отправлено куратору ✦':'Ошибка отправки ✕');
+  if(ok&&!firstSent){sent[sentKey]=Date.now();try{localStorage.setItem('sna_sent_v1',JSON.stringify(sent))}catch(e){}}
+  showToast(ok?(firstSent?'Исправления отправлены куратору ✦':'Отправлено куратору ✦'):'Ошибка отправки ✕');
 }
 
 function formatDate(str){
