@@ -290,7 +290,7 @@ function getCourseDay(){
 // 1) mp3 на нашем сервере: audio/lessons.json → плеер со скоростью 1× / 1,5× / 2×
 // 2) запасной вариант: файлы «УРОК N» из папки Google Диска (через Apps Script) → плеер Диска
 const AUDIO_FEED='https://script.google.com/macros/s/AKfycbzmswfBYkCtvdLv7H8FeKGK_lD4-I-8_2U3II-XebfblXFt6XH-Gx7aq02HrgL8QUfb/exec';
-const LESSON_AUDIO={1:"1FMcARLMIu_ULNJXo7QImFSl61mcQ0SFr",2:"1xT26gX35SlbkjhMFjolAPLq0tNy-zeqi",3:"1glVkA5wMilMoy7bMJd3NTEjhGxfDhgHk"};
+const LESSON_AUDIO={1:"1FMcARLMIu_ULNJXo7QImFSl61mcQ0SFr",2:"1xT26gX35SlbkjhMFjolAPLq0tNy-zeqi",3:"1glVkA5wMilMoy7bMJd3NTEjhGxfDhgHk",4:"1n9_wJhyV_0y_S7WWkqdtG0jd4lJ3wAiB"};
 const AUDIO_MP3={};
 let audioLoaded=false;
 function loadAudioSources(){
@@ -607,6 +607,7 @@ const BLOCKS = [
       {num:4, name:'Сны силы', questions:[
         'Опиши свой сон силы через ощущения тела — не сюжет, а то что было в груди, в коже, в воздухе вокруг. Как называешь это состояние одним словом?',
         'Что меняется в теле и голове после входа в сон силы наяву? Сколько времени занимает, пока состояние начинает подниматься?',
+        'Удалось ли удержаться «одной ногой» в сне силы в реальной неприятной ситуации? Где это было, сколько держалось, что изменилось в тебе и в ситуации?',
       ]},
       {num:5, name:'Осознание во сне', questions:[
         'Получалось ли делать якорь регулярно? Что замечала в себе в моменты его выполнения?',
