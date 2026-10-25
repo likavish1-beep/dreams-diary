@@ -254,7 +254,10 @@ const S_ENTRIES='sna_entries_v1',S_ANSWERS='sna_answers_v1',S_USER='sna_user_v1'
 
 const S_TOKEN='sna_token_v1',S_DELETED='sna_deleted_v1',S_ANS_TS='sna_answers_ts_v1',S_SENT='sna_sent_v1';
 function getJSON(k,d){try{const v=JSON.parse(localStorage.getItem(k)||'null');return v==null?d:v}catch{return d}}
-function setJSON(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+function setJSON(k,v){
+  try{localStorage.setItem(k,JSON.stringify(v))}
+  catch(e){showToast('Память браузера переполнена — не сохранилось ✕');throw e;}
+}
 function getEntries(){return getJSON(S_ENTRIES,[])}
 function saveEntries(a){setJSON(S_ENTRIES,a);markDirty()}
 function getAnswers(){return getJSON(S_ANSWERS,{})}
@@ -281,29 +284,43 @@ function applyServerData(d){
   setJSON(S_ENTRIES,d.entries||[]);setJSON(S_DELETED,d.deleted||[]);
   setJSON(S_ANSWERS,d.answers||{});setJSON(S_ANS_TS,d.answers_ts||{});setJSON(S_SENT,d.sent||{});
 }
-let localRev=0,syncTimer=null,syncing=false;
-function markDirty(){localRev++;clearTimeout(syncTimer);syncTimer=setTimeout(syncNow,800);}
+// The revision counter lives in localStorage so that two open tabs see each other's changes:
+// a server answer is applied only if nothing changed locally while the request was in flight.
+const S_REV='sna_rev_v1';
+function getRev(){try{return +(localStorage.getItem(S_REV)||0)}catch(e){return 0}}
+let syncTimer=null,syncing=false,syncedRev=-1;
+function markDirty(){
+  try{localStorage.setItem(S_REV,String(getRev()+1))}catch(e){}
+  clearTimeout(syncTimer);syncTimer=setTimeout(syncNow,800);
+}
 async function syncNow(rerender){
   const token=getToken();if(!token||syncing)return;
-  syncing=true;const rev=localRev;
+  syncing=true;const rev=getRev();
   try{
     const j=await api('sync',{token,local:localBundle()});
-    if(rev===localRev){applyServerData(j.data);if(rerender)refreshScreens();}
+    if(rev===getRev()){applyServerData(j.data);syncedRev=rev;if(rerender)refreshScreens();}
     else{clearTimeout(syncTimer);syncTimer=setTimeout(syncNow,800);}
   }catch(e){
-    if(e.code==='bad_token'){try{localStorage.removeItem(S_TOKEN)}catch(_){}}
+    if(e.code==='bad_token'){try{localStorage.removeItem(S_TOKEN)}catch(_){}migrateUser();}
   }finally{syncing=false;}
 }
+// Retry whatever is not on the server yet: when the network returns, when the diary is reopened,
+// and once a minute while there are unsent changes.
+function resume(){const u=getUser();if(!u)return;if(getToken())syncNow(true);else migrateUser();}
+window.addEventListener('online',resume);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')resume();});
+setInterval(()=>{if(getUser()&&(!getToken()||getRev()!==syncedRev))resume();},60000);
 function refreshScreens(){
   const active=document.querySelector('.screen.active');if(!active)return;
   if(active.id==='screen-entries')renderEntries();
   if(active.id==='screen-blocks'&&!(document.activeElement&&document.activeElement.tagName==='TEXTAREA'))renderBlocks();
 }
-function startSession(j){
+function startSession(j,rev){
   try{localStorage.setItem(S_TOKEN,j.token)}catch(e){}
   const old=getUser()||{};
   saveUser({name:j.user.name,phone:j.user.phone,email:j.user.email,joinedAt:old.joinedAt||new Date().toISOString()});
-  applyServerData(j.data);
+  // something changed while the request was in flight: keep it and send it in the next sync
+  if(rev===getRev()){applyServerData(j.data);syncedRev=rev;}else markDirty();
   document.getElementById('topbar-user').textContent=j.user.name;
   refreshScreens();
 }
@@ -333,24 +350,28 @@ async function submitLogin(){
   if(phoneDigits(phone).length<10){showRegError('login-error','bad_phone');return;}
   busy('login-btn',true);
   try{
+    const rev=getRev();
     const j=await api('login',{code:CODE_WORD,phone,local:localBundle()});
-    startSession(j);
+    startSession(j,rev);
     document.getElementById('reg-overlay').style.display='none';
     showToast('С возвращением, '+j.user.name+' ✦');
   }catch(e){showRegError('login-error',e.code);}
   finally{busy('login-btn',false);}
 }
 // Students registered before the server existed: attach them once, silently.
+let migrating=false;
 async function migrateUser(){
   const user=getUser();if(!user||getToken())return;
   if(phoneDigits(user.phone).length<10){document.getElementById('phone-overlay').style.display='flex';return;}
+  if(migrating)return;migrating=true;
   try{
+    const rev=getRev();
     const j=await api('register',{code:CODE_WORD,name:user.name,phone:user.phone,email:user.email||'',
       migrate:!user.pendingNew,local:localBundle()});
-    startSession(j);
+    startSession(j,rev);
   }catch(e){
     if(e.code==='bad_phone')document.getElementById('phone-overlay').style.display='flex';
-  }
+  }finally{migrating=false;}
 }
 async function submitAddPhone(){
   const phone=document.getElementById('add-phone').value.trim();
@@ -359,9 +380,10 @@ async function submitAddPhone(){
   const user=getUser()||{};
   busy('add-phone-btn',true);
   try{
+    const rev=getRev();
     const j=await api('register',{code:CODE_WORD,name:user.name||'Студент',phone,email:user.email||'',
       migrate:!user.pendingNew,local:localBundle()});
-    startSession(j);
+    startSession(j,rev);
     document.getElementById('phone-overlay').style.display='none';
     showToast('Готово, записи сохранены ✦');
   }catch(e){showRegError('add-phone-error',e.code);}
@@ -416,8 +438,9 @@ async function submitReg(){
   if(phoneDigits(phone).length<10){showRegError('reg-error','bad_phone');return;}
   busy('reg-btn',true);
   try{
+    const rev=getRev();
     const j=await api('register',{code:CODE_WORD,name,phone,email,local:localBundle()});
-    startSession(j);
+    startSession(j,rev);
     document.getElementById('reg-overlay').style.display='none';
     showToast(j.returning?'С возвращением, '+j.user.name+' ✦':'Добро пожаловать, '+name+' ✦');
   }catch(e){
@@ -901,8 +924,8 @@ function renderBlockContent(){
 function saveAnswer(el){
   const key=el.dataset.key;const answers=getAnswers();
   if((answers[key]||'')!==el.value){
-    const ts=getJSON(S_ANS_TS,{});ts[key]=Date.now();setJSON(S_ANS_TS,ts);
     answers[key]=el.value;saveAnswers(answers);
+    const ts=getJSON(S_ANS_TS,{});ts[key]=Date.now();setJSON(S_ANS_TS,ts);
   }
   const tick=document.getElementById('tick-'+key);
   if(tick){tick.classList.add('show');setTimeout(()=>tick.classList.remove('show'),1500);}
