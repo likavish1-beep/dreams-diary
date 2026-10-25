@@ -79,6 +79,10 @@ input[type=date],input[type=text],input[type=tel],input[type=email]{min-height:a
 .reg-modal{background:var(--bg2);border:1px solid var(--border);width:100%;max-width:380px;padding:28px 24px}
 .reg-moon{font-size:44px;text-align:center;margin-bottom:12px}
 .reg-modal h2{text-align:center;font-size:20px;color:var(--cream);margin-bottom:6px;line-height:1.35}
+.reg-tabs{display:flex;gap:6px;margin-bottom:6px}
+.reg-tabs .block-tab{flex:1;text-align:center;padding:9px 6px}
+.reg-err{font-size:13px;color:#C04060;margin-top:10px;display:none;line-height:1.45}
+.reg-note{font-size:12px;color:var(--muted);font-style:italic;margin-top:8px;line-height:1.45}
 .reg-modal .reg-sub{text-align:center;font-size:11px;color:var(--muted);font-style:italic;margin-bottom:20px;letter-spacing:.12em;text-transform:uppercase}
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:150;overflow-y:auto}
 .modal-overlay.open{display:flex;align-items:flex-start;justify-content:center;padding:20px 12px}
@@ -104,19 +108,48 @@ input[type=date],input[type=text],input[type=tel],input[type=email]{min-height:a
   </div>
 </div>
 
-<!-- REGISTRATION -->
+<!-- REGISTRATION / LOGIN -->
 <div class="reg-overlay" id="reg-overlay">
   <div class="reg-modal">
     <div class="reg-moon">🌙</div>
     <h2>Добро пожаловать<br>в Дневник снов</h2>
     <p class="reg-sub">Сновидения с Алатыря</p>
-    <label>Твоё имя</label>
-    <input type="text" id="reg-name" placeholder="Как тебя зовут" autocomplete="name">
+    <div class="reg-tabs">
+      <button type="button" class="block-tab active" id="tab-login" onclick="regMode('login')">Я уже в дневнике</button>
+      <button type="button" class="block-tab" id="tab-new" onclick="regMode('new')">Я здесь впервые</button>
+    </div>
+    <div id="reg-login">
+      <label>Телефон, который указывала</label>
+      <input type="tel" id="login-phone" placeholder="+7..." autocomplete="tel">
+      <div class="reg-note">Дневник узнает тебя по номеру и вернёт все записи.</div>
+      <div class="reg-err" id="login-error"></div>
+      <button class="btn" id="login-btn" onclick="submitLogin()">Войти</button>
+    </div>
+    <div id="reg-new" style="display:none">
+      <label>Твоё имя</label>
+      <input type="text" id="reg-name" placeholder="Как тебя зовут" autocomplete="name">
+      <label>Телефон</label>
+      <input type="tel" id="reg-phone" placeholder="+7..." autocomplete="tel">
+      <label>Email</label>
+      <input type="email" id="reg-email" placeholder="email@..." autocomplete="email">
+      <div class="reg-note">По телефону дневник узнает тебя при следующем входе, с любого устройства.</div>
+      <div class="reg-err" id="reg-error"></div>
+      <button class="btn" id="reg-btn" onclick="submitReg()">Войти в дневник</button>
+    </div>
+  </div>
+</div>
+
+<!-- PHONE FOR EXISTING STUDENTS WITHOUT ONE -->
+<div class="reg-overlay" id="phone-overlay">
+  <div class="reg-modal">
+    <div class="reg-moon">🌙</div>
+    <h2>Добавь свой телефон</h2>
+    <p class="reg-sub">Один раз</p>
+    <div class="reg-note" style="margin-top:0">Теперь записи хранятся не только в телефоне. По номеру дневник узнает тебя при следующем входе и ничего не потеряет.</div>
     <label>Телефон</label>
-    <input type="tel" id="reg-phone" placeholder="+7..." autocomplete="tel">
-    <label>Email</label>
-    <input type="email" id="reg-email" placeholder="email@..." autocomplete="email">
-    <button class="btn" onclick="submitReg()">Войти в дневник</button>
+    <input type="tel" id="add-phone" placeholder="+7..." autocomplete="tel">
+    <div class="reg-err" id="add-phone-error"></div>
+    <button class="btn" id="add-phone-btn" onclick="submitAddPhone()">Сохранить</button>
   </div>
 </div>
 
@@ -214,29 +247,150 @@ input[type=date],input[type=text],input[type=tel],input[type=email]{min-height:a
 </div>
 
 <script>
-const TG_TOKEN='8805888407:AAE40dNALk1B-oFIEDp9xFd-cxiSS9y5Wvg';
-const TG_CHAT='1593932648';
 // День 1 курса начался 19 октября 2026. Каждый новый урок открывается в 15:00 по Москве (12:00 UTC)
 const COURSE_START=new Date('2026-10-19');
 const UNLOCK_BASE=Date.UTC(2026,9,19,12,0,0);
 const S_ENTRIES='sna_entries_v1',S_ANSWERS='sna_answers_v1',S_USER='sna_user_v1';
 
-function getEntries(){try{return JSON.parse(localStorage.getItem(S_ENTRIES)||'[]')}catch{return[]}}
-function saveEntries(a){localStorage.setItem(S_ENTRIES,JSON.stringify(a))}
-function getAnswers(){try{return JSON.parse(localStorage.getItem(S_ANSWERS)||'{}')}catch{return{}}}
-function saveAnswers(o){localStorage.setItem(S_ANSWERS,JSON.stringify(o))}
+const S_TOKEN='sna_token_v1',S_DELETED='sna_deleted_v1',S_ANS_TS='sna_answers_ts_v1',S_SENT='sna_sent_v1';
+function getJSON(k,d){try{const v=JSON.parse(localStorage.getItem(k)||'null');return v==null?d:v}catch{return d}}
+function setJSON(k,v){
+  try{localStorage.setItem(k,JSON.stringify(v))}
+  catch(e){showToast('Память браузера переполнена — не сохранилось ✕');throw e;}
+}
+function getEntries(){return getJSON(S_ENTRIES,[])}
+function saveEntries(a){setJSON(S_ENTRIES,a);markDirty()}
+function getAnswers(){return getJSON(S_ANSWERS,{})}
+function saveAnswers(o){setJSON(S_ANSWERS,o);markDirty()}
+
+// Server sync: students are recognised by phone; entries and answers live on the server too,
+// so a wiped browser or a new phone loses nothing.
+const API='/api/';
+async function api(path,body){
+  let r;
+  try{r=await fetch(API+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});}
+  catch(e){throw Object.assign(new Error('network'),{code:'network'});}
+  let j={};try{j=await r.json()}catch(e){}
+  if(!r.ok)throw Object.assign(new Error(j.error||'http'),{code:j.error||'network'});
+  return j;
+}
+function getToken(){try{return localStorage.getItem(S_TOKEN)||''}catch(e){return''}}
+function localBundle(){
+  return {entries:getEntries(),deleted:getJSON(S_DELETED,[]),answers:getAnswers(),
+          answers_ts:getJSON(S_ANS_TS,{}),sent:getJSON(S_SENT,{})};
+}
+function applyServerData(d){
+  if(!d)return;
+  setJSON(S_ENTRIES,d.entries||[]);setJSON(S_DELETED,d.deleted||[]);
+  setJSON(S_ANSWERS,d.answers||{});setJSON(S_ANS_TS,d.answers_ts||{});setJSON(S_SENT,d.sent||{});
+}
+// The revision counter lives in localStorage so that two open tabs see each other's changes:
+// a server answer is applied only if nothing changed locally while the request was in flight.
+const S_REV='sna_rev_v1';
+function getRev(){try{return +(localStorage.getItem(S_REV)||0)}catch(e){return 0}}
+let syncTimer=null,syncing=false,syncedRev=-1;
+function markDirty(){
+  try{localStorage.setItem(S_REV,String(getRev()+1))}catch(e){}
+  clearTimeout(syncTimer);syncTimer=setTimeout(syncNow,800);
+}
+async function syncNow(rerender){
+  const token=getToken();if(!token||syncing)return;
+  syncing=true;const rev=getRev();
+  try{
+    const j=await api('sync',{token,local:localBundle()});
+    if(rev===getRev()){applyServerData(j.data);syncedRev=rev;if(rerender)refreshScreens();}
+    else{clearTimeout(syncTimer);syncTimer=setTimeout(syncNow,800);}
+  }catch(e){
+    if(e.code==='bad_token'){try{localStorage.removeItem(S_TOKEN)}catch(_){}migrateUser();}
+  }finally{syncing=false;}
+}
+// Retry whatever is not on the server yet: when the network returns, when the diary is reopened,
+// and once a minute while there are unsent changes.
+function resume(){const u=getUser();if(!u)return;if(getToken())syncNow(true);else migrateUser();}
+window.addEventListener('online',resume);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')resume();});
+setInterval(()=>{if(getUser()&&(!getToken()||getRev()!==syncedRev))resume();},60000);
+function refreshScreens(){
+  const active=document.querySelector('.screen.active');if(!active)return;
+  if(active.id==='screen-entries')renderEntries();
+  if(active.id==='screen-blocks'&&!(document.activeElement&&document.activeElement.tagName==='TEXTAREA'))renderBlocks();
+}
+function startSession(j,rev){
+  try{localStorage.setItem(S_TOKEN,j.token)}catch(e){}
+  const old=getUser()||{};
+  saveUser({name:j.user.name,phone:j.user.phone,email:j.user.email,joinedAt:old.joinedAt||new Date().toISOString()});
+  // something changed while the request was in flight: keep it and send it in the next sync
+  if(rev===getRev()){applyServerData(j.data);syncedRev=rev;}else markDirty();
+  document.getElementById('topbar-user').textContent=j.user.name;
+  refreshScreens();
+}
+async function tgSend(text){
+  const token=getToken();if(!token)return false;
+  try{await api('notify',{token,text});return true;}catch(e){return false;}
+}
+function phoneDigits(v){return (v||'').replace(/\D/g,'')}
+function regErrorText(code){
+  return {bad_phone:'Проверь номер телефона — нужно не меньше 10 цифр.',
+    unknown_phone:'Не нашла такой номер. Проверь цифры или войди как новенькая во вкладке «Я здесь впервые».',
+    no_name:'Напиши своё имя.',bad_code:'Кодовое слово не подошло. Обнови страницу и введи его заново.',
+    slow_down:'Слишком много попыток. Подожди минуту.',
+    network:'Нет связи с дневником. Проверь интернет и нажми ещё раз.'}[code]||'Что-то пошло не так. Попробуй ещё раз.';
+}
+function showRegError(id,code){const el=document.getElementById(id);el.textContent=regErrorText(code);el.style.display='block';}
+function busy(id,on){const b=document.getElementById(id);if(b){b.disabled=on;b.style.opacity=on?.6:1;}}
+function regMode(mode){
+  document.getElementById('reg-login').style.display=mode==='login'?'block':'none';
+  document.getElementById('reg-new').style.display=mode==='new'?'block':'none';
+  document.getElementById('tab-login').classList.toggle('active',mode==='login');
+  document.getElementById('tab-new').classList.toggle('active',mode==='new');
+}
+async function submitLogin(){
+  const phone=document.getElementById('login-phone').value.trim();
+  document.getElementById('login-error').style.display='none';
+  if(phoneDigits(phone).length<10){showRegError('login-error','bad_phone');return;}
+  busy('login-btn',true);
+  try{
+    const rev=getRev();
+    const j=await api('login',{code:CODE_WORD,phone,local:localBundle()});
+    startSession(j,rev);
+    document.getElementById('reg-overlay').style.display='none';
+    showToast('С возвращением, '+j.user.name+' ✦');
+  }catch(e){showRegError('login-error',e.code);}
+  finally{busy('login-btn',false);}
+}
+// Students registered before the server existed: attach them once, silently.
+let migrating=false;
+async function migrateUser(){
+  const user=getUser();if(!user||getToken())return;
+  if(phoneDigits(user.phone).length<10){document.getElementById('phone-overlay').style.display='flex';return;}
+  if(migrating)return;migrating=true;
+  try{
+    const rev=getRev();
+    const j=await api('register',{code:CODE_WORD,name:user.name,phone:user.phone,email:user.email||'',
+      migrate:!user.pendingNew,local:localBundle()});
+    startSession(j,rev);
+  }catch(e){
+    if(e.code==='bad_phone')document.getElementById('phone-overlay').style.display='flex';
+  }finally{migrating=false;}
+}
+async function submitAddPhone(){
+  const phone=document.getElementById('add-phone').value.trim();
+  document.getElementById('add-phone-error').style.display='none';
+  if(phoneDigits(phone).length<10){showRegError('add-phone-error','bad_phone');return;}
+  const user=getUser()||{};
+  busy('add-phone-btn',true);
+  try{
+    const rev=getRev();
+    const j=await api('register',{code:CODE_WORD,name:user.name||'Студент',phone,email:user.email||'',
+      migrate:!user.pendingNew,local:localBundle()});
+    startSession(j,rev);
+    document.getElementById('phone-overlay').style.display='none';
+    showToast('Готово, записи сохранены ✦');
+  }catch(e){showRegError('add-phone-error',e.code);}
+  finally{busy('add-phone-btn',false);}
+}
 function getUser(){try{return JSON.parse(localStorage.getItem(S_USER)||'null')}catch{return null}}
 function saveUser(u){localStorage.setItem(S_USER,JSON.stringify(u))}
-
-async function tgSend(text){
-  try{
-    const r=await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`,{
-      method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({chat_id:TG_CHAT,text,parse_mode:'HTML'})
-    });
-    return r.ok;
-  }catch(e){return false;}
-}
 
 const CODE_WORD='алатырь';
 
@@ -250,7 +404,10 @@ function checkReg(){
   document.getElementById('code-overlay').style.display='none';
   const user=getUser();
   if(!user){document.getElementById('reg-overlay').style.display='flex';}
-  else{document.getElementById('reg-overlay').style.display='none';document.getElementById('topbar-user').textContent=user.name;}
+  else{
+    document.getElementById('reg-overlay').style.display='none';document.getElementById('topbar-user').textContent=user.name;
+    if(getToken())syncNow(true);else migrateUser();
+  }
 }
 
 function checkCode(){
@@ -276,13 +433,24 @@ async function submitReg(){
   const name=document.getElementById('reg-name').value.trim();
   const phone=document.getElementById('reg-phone').value.trim();
   const email=document.getElementById('reg-email').value.trim();
-  if(!name){showToast('Введи своё имя ☾');return;}
-  const user={name,phone,email,joinedAt:new Date().toISOString()};
-  saveUser(user);
-  document.getElementById('reg-overlay').style.display='none';
-  document.getElementById('topbar-user').textContent=name;
-  await tgSend(`🌙 <b>НОВЫЙ СТУДЕНТ</b>\n\nИмя: <b>${escHtml(name)}</b>\n📱 ${escHtml(phone||'—')}\n📧 ${escHtml(email||'—')}`);
-  showToast('Добро пожаловать, '+name+' ✦');
+  document.getElementById('reg-error').style.display='none';
+  if(!name){showRegError('reg-error','no_name');return;}
+  if(phoneDigits(phone).length<10){showRegError('reg-error','bad_phone');return;}
+  busy('reg-btn',true);
+  try{
+    const rev=getRev();
+    const j=await api('register',{code:CODE_WORD,name,phone,email,local:localBundle()});
+    startSession(j,rev);
+    document.getElementById('reg-overlay').style.display='none';
+    showToast(j.returning?'С возвращением, '+j.user.name+' ✦':'Добро пожаловать, '+name+' ✦');
+  }catch(e){
+    if(e.code!=='network'){showRegError('reg-error',e.code);return;}
+    // Server unreachable: let her in now, register later from migrateUser() with a "new" notice.
+    saveUser({name,phone,email,joinedAt:new Date().toISOString(),pendingNew:true});
+    document.getElementById('reg-overlay').style.display='none';
+    document.getElementById('topbar-user').textContent=name;
+    showToast('Добро пожаловать, '+name+' ✦');
+  }finally{busy('reg-btn',false);}
 }
 
 function getCourseDay(){
@@ -542,6 +710,7 @@ function closeModal(){document.getElementById('entry-modal').classList.remove('o
 document.getElementById('entry-modal').addEventListener('click',function(e){if(e.target===this)closeModal();});
 function deleteEntry(id){
   if(!confirm('Удалить эту запись?'))return;
+  const del=getJSON(S_DELETED,[]);if(!del.includes(id)){del.push(id);setJSON(S_DELETED,del);}
   saveEntries(getEntries().filter(e=>e.id!==id));
   closeModal();renderEntries();showToast('Запись удалена');
 }
@@ -753,7 +922,11 @@ function renderBlockContent(){
 }
 
 function saveAnswer(el){
-  const key=el.dataset.key;const answers=getAnswers();answers[key]=el.value;saveAnswers(answers);
+  const key=el.dataset.key;const answers=getAnswers();
+  if((answers[key]||'')!==el.value){
+    answers[key]=el.value;saveAnswers(answers);
+    const ts=getJSON(S_ANS_TS,{});ts[key]=Date.now();setJSON(S_ANS_TS,ts);
+  }
   const tick=document.getElementById('tick-'+key);
   if(tick){tick.classList.add('show');setTimeout(()=>tick.classList.remove('show'),1500);}
 }
@@ -764,7 +937,7 @@ async function tgSendLesson(blockId,lessonNum){
   const lesson=block.lessons.find(l=>l.num===lessonNum);if(!lesson)return;
   const answers=getAnswers();
   const sentKey=`${blockId}_l${lessonNum}`;
-  let sent={};try{sent=JSON.parse(localStorage.getItem('sna_sent_v1')||'{}')}catch(e){}
+  const sent=getJSON(S_SENT,{});
   const firstSent=sent[sentKey];
   let msg=firstSent
     ?`✏️ <b>КОРРЕКТИРОВКА ответов</b> — ${escHtml(uname)}\n<b>${escHtml(block.name)} · Урок ${lessonNum} — ${escHtml(lesson.name)}</b>\nИсправлены ответы, отправленные ${fmtSent(firstSent)}\n\n`
@@ -776,7 +949,7 @@ async function tgSendLesson(blockId,lessonNum){
   });
   if(!has){showToast('Нет заполненных ответов ☾');return;}
   const ok=await tgSend(msg);
-  if(ok&&!firstSent){sent[sentKey]=Date.now();try{localStorage.setItem('sna_sent_v1',JSON.stringify(sent))}catch(e){}}
+  if(ok&&!firstSent){sent[sentKey]=Date.now();setJSON(S_SENT,sent);markDirty();}
   showToast(ok?(firstSent?'Исправления отправлены куратору ✦':'Отправлено куратору ✦'):'Ошибка отправки ✕');
 }
 
