@@ -504,8 +504,8 @@ loadAudioSources();
 const LESSON_DAYS={
   1:1,2:2,3:3,4:4,5:5,
   6:8,7:9,8:10,9:11,10:12,
-  11:15,12:16,13:17,14:18,15:19,
-  16:22,17:23,18:24
+  11:15,12:17,13:18,14:19,
+  15:22,16:23,17:24
 };
 
 function showScreen(id,btn){
@@ -756,7 +756,7 @@ function renderPractices(){
       html+=`<div class="practice-card locked"><div class="practice-num">🔒</div><div class="practice-title">${p.title}</div><div class="practice-locked-note">Откроется позже</div></div>`;
     }
   });
-  [[3,11],[4,16]].filter(([b])=>!PRACTICES.some(p=>p.block===b)).forEach(([b,firstLesson])=>{
+  [[3,11],[4,15]].filter(([b])=>!PRACTICES.some(p=>p.block===b)).forEach(([b,firstLesson])=>{
     const names=['','','Вход и своё пространство','Работа силой','Мастерство'];
     html+=`<div style="margin-top:24px;padding:14px;background:var(--bg3);border:1px solid var(--border);opacity:.35;text-align:center">
       <div style="font-size:11px;letter-spacing:.15em;color:var(--gold);text-transform:uppercase;margin-bottom:4px">Блок ${b}</div>
@@ -834,29 +834,24 @@ const BLOCKS = [
   {
     id:'b3', name:'Блок 3', title:'Работа силой',
     lessons:[
-      {num:11, name:'Стать стихией', questions:[
+      {num:11, name:'Стать стихией', note:'Если вы ещё не знаете своего Зверя — сначала приходите на медитацию и узнайте, кто ваш Зверь. Подробно о Звере Анжелика расскажет на открытом эфире в четверг и даст там практику.', questions:[
         'Какую стихию выбрала? Опиши вход в неё: с чего началось, что произошло дальше.',
         'Дошла ли до грани — что там было? Если не пошла дальше, что остановило?',
         'Что отличало ощущение стихии от обычного образа или картинки?',
       ]},
-      {num:12, name:'Общая комната', questions:[
-        'Что ты увидела в общей комнате? Что узнала из чужих описаний, что увидела своего?',
-        'Что внесла в комнату? Что изменила в чужом?',
-        'Кого и как узнала в общем стихийном круге — по чему (запаху, движению, ощущению)?',
-      ]},
-      {num:13, name:'Зеркало и тело', questions:[
+      {num:12, key:13, name:'Зеркало и тело', questions:[
         'Удалось ли добиться точного отражения сразу? Что не совпало с первого раза?',
         'Какой фрагмент тела выбрала для работы и почему?',
         'Что ощущала в момент переноса образа на тело?',
         'Какие изменения заметила в Яви через несколько дней работы с зеркалом?',
       ]},
-      {num:14, name:'Маски', questions:[
+      {num:13, key:14, name:'Маски', questions:[
         'Какой образ выбрала? Насколько то, что получилось, совпало с задуманным?',
         'Как вёл себя образ — что он делал не так, как ты бы сделала?',
         'Где было твоё «я» в момент, когда ты была в маске?',
         'Легко ли вернулось привычное обличье? Что помогло?',
       ]},
-      {num:15, name:'Чужие сны', questions:[
+      {num:14, key:15, name:'Чужие сны', questions:[
         'В чей сон ты входила? Что там увидела и почувствовала?',
         'По каким признакам понимала, что это чужой сон, а не свой?',
         'Где был амулет во время этой работы?',
@@ -866,17 +861,17 @@ const BLOCKS = [
   {
     id:'b4', name:'Блок 4', title:'Мастерство',
     lessons:[
-      {num:16, name:'Многоуровневый сон и досматривание', questions:[
+      {num:15, key:16, name:'Многоуровневый сон и досматривание', questions:[
         'Удалось ли заснуть внутри сна? Что произошло на втором уровне?',
         'На каком уровне ты проснулась — и как это обнаружила?',
         'Было ли досматривание сна — когда вернулась туда, где оборвалось?',
       ]},
-      {num:17, name:'Сонная комната как рабочее место', questions:[
+      {num:16, key:17, name:'Сонная комната как рабочее место', questions:[
         'С чьим фантомом ты работала в сонной комнате? Как он выглядел?',
         'Что ты смогла считать или почувствовать с фантома в сонной комнате?',
         'Чем отличалась работа с фантомом человека от работы с фантомом предмета?',
       ]},
-      {num:18, name:'Личный протокол и итоговая аттестация', questions:[
+      {num:17, key:18, name:'Личный протокол и итоговая аттестация', questions:[
         'Что изменилось в твоих снах с начала курса? Сколько снов ты помнишь теперь в среднем за неделю?',
         'Какие три навыка из курса ты используешь или будешь использовать каждый день?',
         'Что осталось незавершённым или хочется развить дальше?',
@@ -917,9 +912,10 @@ function renderBlockContent(){
       </div>`;
       qNum+=lesson.questions.length;
     } else {
+      if(lesson.note)html+=`<div class="card" style="padding:12px 14px;margin-bottom:14px;font-size:14px;color:var(--cream)">✦ ${lesson.note}</div>`;
       html+=lessonAudioHtml(lesson.num);
       lesson.questions.forEach((q,qi)=>{
-        const key=`${block.id}_l${lesson.num}_q${qi}`;
+        const key=`${block.id}_l${lesson.key||lesson.num}_q${qi}`;
         const val=answers[key]||'';
         html+=`<div class="question-num">Вопрос ${qNum++}</div>
           <div class="question-text">${q}</div>
@@ -948,7 +944,8 @@ async function tgSendLesson(blockId,lessonNum){
   const block=BLOCKS.find(b=>b.id===blockId);if(!block)return;
   const lesson=block.lessons.find(l=>l.num===lessonNum);if(!lesson)return;
   const answers=getAnswers();
-  const sentKey=`${blockId}_l${lessonNum}`;
+  const lk=lesson.key||lessonNum;
+  const sentKey=`${blockId}_l${lk}`;
   const sent=getJSON(S_SENT,{});
   const firstSent=sent[sentKey];
   let msg=firstSent
@@ -956,7 +953,7 @@ async function tgSendLesson(blockId,lessonNum){
     :`📚 <b>ОТВЕТЫ</b> — ${escHtml(uname)}\n<b>${escHtml(block.name)} · Урок ${lessonNum} — ${escHtml(lesson.name)}</b>\n\n`;
   let has=false;
   lesson.questions.forEach((q,qi)=>{
-    const a=answers[`${blockId}_l${lessonNum}_q${qi}`];
+    const a=answers[`${blockId}_l${lk}_q${qi}`];
     if(a&&a.trim()){msg+=`❓ ${escHtml(q)}\n💬 ${escHtml(a.trim())}\n\n`;has=true;}
   });
   if(!has){showToast('Нет заполненных ответов ☾');return;}
