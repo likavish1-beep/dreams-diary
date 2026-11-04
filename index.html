@@ -505,7 +505,7 @@ const LESSON_DAYS={
   1:1,2:2,3:3,4:4,5:5,
   6:8,7:9,8:10,9:11,10:12,
   11:15,12:17,13:18,14:19,
-  15:22,16:23,17:24
+  16:22,17:23,18:24
 };
 
 function showScreen(id,btn){
@@ -756,7 +756,7 @@ function renderPractices(){
       html+=`<div class="practice-card locked"><div class="practice-num">🔒</div><div class="practice-title">${p.title}</div><div class="practice-locked-note">Откроется позже</div></div>`;
     }
   });
-  [[3,11],[4,15]].filter(([b])=>!PRACTICES.some(p=>p.block===b)).forEach(([b,firstLesson])=>{
+  [[3,11],[4,16]].filter(([b])=>!PRACTICES.some(p=>p.block===b)).forEach(([b,firstLesson])=>{
     const names=['','','Вход и своё пространство','Работа силой','Мастерство'];
     html+=`<div style="margin-top:24px;padding:14px;background:var(--bg3);border:1px solid var(--border);opacity:.35;text-align:center">
       <div style="font-size:11px;letter-spacing:.15em;color:var(--gold);text-transform:uppercase;margin-bottom:4px">Блок ${b}</div>
@@ -861,17 +861,17 @@ const BLOCKS = [
   {
     id:'b4', name:'Блок 4', title:'Мастерство',
     lessons:[
-      {num:15, key:16, name:'Многоуровневый сон и досматривание', questions:[
+      {num:16, name:'Многоуровневый сон и досматривание', questions:[
         'Удалось ли заснуть внутри сна? Что произошло на втором уровне?',
         'На каком уровне ты проснулась — и как это обнаружила?',
         'Было ли досматривание сна — когда вернулась туда, где оборвалось?',
       ]},
-      {num:16, key:17, name:'Сонная комната как рабочее место', questions:[
+      {num:17, name:'Сонная комната как рабочее место', questions:[
         'С чьим фантомом ты работала в сонной комнате? Как он выглядел?',
         'Что ты смогла считать или почувствовать с фантома в сонной комнате?',
         'Чем отличалась работа с фантомом человека от работы с фантомом предмета?',
       ]},
-      {num:17, key:18, name:'Личный протокол и итоговая аттестация', questions:[
+      {num:18, name:'Личный протокол и итоговая аттестация', questions:[
         'Что изменилось в твоих снах с начала курса? Сколько снов ты помнишь теперь в среднем за неделю?',
         'Какие три навыка из курса ты используешь или будешь использовать каждый день?',
         'Что осталось незавершённым или хочется развить дальше?',
